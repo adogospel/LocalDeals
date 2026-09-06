@@ -1,0 +1,13 @@
+{
+  "name": "localdeals",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "mobile": "npm --prefix apps/mobile start",
+    "android": "npm --prefix apps/mobile run android",
+    "ios": "npm --prefix apps/mobile run ios",
+    "check": "npm --prefix apps/mobile run check",
+    "test": "npm --prefix apps/mobile test"
+  }
+}
+

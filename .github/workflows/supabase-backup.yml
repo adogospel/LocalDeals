@@ -1,0 +1,31 @@
+name: Supabase logical backup
+
+on:
+  schedule:
+    - cron: '30 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Create logical backups
+        if: env.SUPABASE_DB_URL != ''
+        run: |
+          mkdir -p backups
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backups/roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backups/schema.sql
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f backups/data.sql --data-only --use-copy
+      - uses: actions/upload-artifact@v4
+        if: env.SUPABASE_DB_URL != ''
+        with:
+          name: supabase-backup-${{ github.run_id }}
+          path: backups/
+          retention-days: 14
+

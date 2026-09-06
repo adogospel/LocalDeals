@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.expo/
+dist/
+coverage/
+backups/
+supabase/.temp/
+supabase/.branches/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "LocalDeals",
+    "slug": "localdeals",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "localdeals",
+    "userInterfaceStyle": "light",
+    "primaryColor": "#F5661A",
+    "ios": {
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "cm.localdeals.app",
+      "supportsTablet": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "ExpoLocalization_supportsRTL": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFF0E7",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true,
+      "package": "cm.localdeals.app"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-web-browser",
+        {
+          "experimentalLauncherActivity": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFCFA",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      "expo-sqlite",
+      "expo-localization",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LocalDeals accède à vos photos pour ajouter une photo de profil et publier vos articles.",
+          "cameraPermission": "LocalDeals accède à l’appareil photo pour photographier votre profil et vos articles.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "supportsRTL": false,
+      "router": {},
+      "eas": {
+        "projectId": "1f9141a7-7a55-4073-a993-99b4193e0f75"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1f9141a7-7a55-4073-a993-99b4193e0f75"
+    }
+  }
+}
