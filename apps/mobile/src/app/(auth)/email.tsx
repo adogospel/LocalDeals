@@ -19,7 +19,13 @@ import { colors, radii, spacing } from '@/theme/tokens';
 export default function EmailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { isConfigured, isDevelopmentAccessEnabled, signInForDevelopment } = useAuth();
+  const {
+    isConfigured,
+    isDevelopmentAccessEnabled,
+    isGoogleAuthEnabled,
+    isPhoneAuthEnabled,
+    signInForDevelopment,
+  } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -135,18 +141,22 @@ export default function EmailScreen() {
             onPress={() => void login()}
           />
 
-          <View style={styles.dividerRow}>
-            <View style={styles.divider} />
-            <AppText variant="caption" color={colors.muted}>{t('emailAuth.or')}</AppText>
-            <View style={styles.divider} />
-          </View>
-          <Button
-            label={t('emailAuth.continueGoogle')}
-            variant="secondary"
-            loading={loading === 'google'}
-            disabled={!isConfigured || loading !== null}
-            onPress={() => void loginWithGoogle()}
-          />
+          {isGoogleAuthEnabled ? (
+            <>
+              <View style={styles.dividerRow}>
+                <View style={styles.divider} />
+                <AppText variant="caption" color={colors.muted}>{t('emailAuth.or')}</AppText>
+                <View style={styles.divider} />
+              </View>
+              <Button
+                label={t('emailAuth.continueGoogle')}
+                variant="secondary"
+                loading={loading === 'google'}
+                disabled={loading !== null}
+                onPress={() => void loginWithGoogle()}
+              />
+            </>
+          ) : null}
         </View>
 
         {isDevelopmentAccessEnabled ? (
@@ -186,10 +196,12 @@ export default function EmailScreen() {
           </Pressable>
         </View>
 
-        <Pressable accessibilityRole="button" onPress={() => router.push('/(auth)/phone')} style={styles.phoneLink}>
-          <SymbolView name="iphone" size={15} tintColor={colors.slate} />
-          <AppText variant="caption" color={colors.slate}>{t('emailAuth.usePhone')}</AppText>
-        </Pressable>
+        {isPhoneAuthEnabled ? (
+          <Pressable accessibilityRole="button" onPress={() => router.push('/(auth)/phone')} style={styles.phoneLink}>
+            <SymbolView name="iphone" size={15} tintColor={colors.slate} />
+            <AppText variant="caption" color={colors.slate}>{t('emailAuth.usePhone')}</AppText>
+          </Pressable>
+        ) : null}
       </View>
     </AuthShell>
   );

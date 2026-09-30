@@ -7,20 +7,34 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "environment": "development",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_ENABLE_DEV_AUTH": "true"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "preview",
+        "EXPO_PUBLIC_ENABLE_DEV_AUTH": "false"
+      }
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
-      "uploadSourceMaps": true
+      "uploadSourceMaps": true,
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_ENABLE_DEV_AUTH": "false"
+      }
     }
   },
   "submit": {
     "production": {}
   }
 }
-

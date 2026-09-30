@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +19,7 @@ import { colors, radii, spacing } from '@/theme/tokens';
 export default function PhoneScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { isConfigured } = useAuth();
+  const { isConfigured, isPhoneAuthEnabled } = useAuth();
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,6 +49,10 @@ export default function PhoneScreen() {
       {t('auth.terms')}
     </AppText>
   );
+
+  if (!isPhoneAuthEnabled) {
+    return <Redirect href="/(auth)/email" />;
+  }
 
   return (
     <AuthShell

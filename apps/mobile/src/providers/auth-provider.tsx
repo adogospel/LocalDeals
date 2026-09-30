@@ -34,6 +34,8 @@ type AuthContextValue = {
   isLoading: boolean;
   isConfigured: boolean;
   isDevelopmentAccessEnabled: boolean;
+  isGoogleAuthEnabled: boolean;
+  isPhoneAuthEnabled: boolean;
   error: string | null;
   refreshProfile: () => Promise<void>;
   updateDevelopmentProfile: (updates: Partial<Profile>) => Promise<void>;
@@ -64,16 +66,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  const sessionUserId = session?.user.id;
+
   const refreshProfile = useCallback(async () => {
     if (developmentSession) return;
-    if (!session?.user.id) return;
+    if (!sessionUserId) return;
     setError(null);
     try {
-      await loadProfile(session.user.id);
+      await loadProfile(sessionUserId);
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     }
-  }, [developmentSession, loadProfile, session?.user.id]);
+  }, [developmentSession, loadProfile, sessionUserId]);
 
   useEffect(() => {
     if (developmentSession) {
@@ -190,6 +194,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isLoading,
       isConfigured: env.isSupabaseConfigured,
       isDevelopmentAccessEnabled: env.isDevelopmentAccessEnabled,
+      isGoogleAuthEnabled: env.isGoogleAuthEnabled,
+      isPhoneAuthEnabled: env.isPhoneAuthEnabled,
       error,
       refreshProfile,
       updateDevelopmentProfile,

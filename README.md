@@ -4,7 +4,7 @@ Marketplace mobile locale destinée au Cameroun. Les phases 3 à 6 du MVP fourni
 
 ## État du MVP — phases 3 à 6
 
-- Expo SDK 54, React Native, Expo Router et TypeScript strict
+- Expo SDK 57, React Native, Expo Router et TypeScript strict
 - Design system LocalDeals : orange, blanc, bleu nuit et police Sora
 - Connexion e-mail/mot de passe et vérification e-mail par code à 6 chiffres
 - Création de compte avec nom, ville et quartier
@@ -38,6 +38,8 @@ Marketplace mobile locale destinée au Cameroun. Les phases 3 à 6 du MVP fourni
 - Traductions françaises et anglaises, tests, lint et CI
 
 La phase 6 est terminée et sa migration `202608290005_phase_6_trust_transactions.sql` est déployée sur le projet Supabase lié.
+
+La première phase de mise à niveau vers la production est également terminée : séparation stricte des environnements, accès développeur impossible hors développement et fournisseurs Google/SMS protégés par des drapeaux sûrs. Les dix phases sont détaillées dans [docs/TECHNICAL_ROADMAP.md](docs/TECHNICAL_ROADMAP.md) et la configuration EAS dans [docs/PRODUCTION_CONFIGURATION.md](docs/PRODUCTION_CONFIGURATION.md).
 
 ## Architecture backend
 
@@ -83,6 +85,8 @@ EXPO_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 EXPO_PUBLIC_APP_ENV=development
 EXPO_PUBLIC_ENABLE_DEV_AUTH=true
+EXPO_PUBLIC_ENABLE_GOOGLE_AUTH=false
+EXPO_PUBLIC_ENABLE_PHONE_AUTH=false
 ```
 
 Ne jamais placer une clé `service_role`, un secret Google, un mot de passe SMTP ou un mot de passe PostgreSQL dans une variable `EXPO_PUBLIC_*`.

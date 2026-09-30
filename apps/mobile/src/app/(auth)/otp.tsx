@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { Logo } from '@/components/ui/logo';
 import { requestPhoneOtp, verifyPhoneOtp } from '@/features/auth/auth-service';
 import { maskPhone } from '@/features/auth/phone';
 import { getErrorMessage } from '@/lib/errors';
+import { useAuth } from '@/providers/auth-provider';
 import { colors, radii, spacing } from '@/theme/tokens';
 
 const RESEND_SECONDS = 60;
@@ -20,6 +21,7 @@ export default function OtpScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ phone?: string }>();
+  const { isPhoneAuthEnabled } = useAuth();
   const phone = typeof params.phone === 'string' ? params.phone : '';
   const [token, setToken] = useState('');
   const [countdown, setCountdown] = useState(RESEND_SECONDS);
@@ -33,8 +35,8 @@ export default function OtpScreen() {
   }, [countdown]);
 
   useEffect(() => {
-    if (!phone) router.replace('/(auth)/phone');
-  }, [phone, router]);
+    if (isPhoneAuthEnabled && !phone) router.replace('/(auth)/phone');
+  }, [isPhoneAuthEnabled, phone, router]);
 
   const verify = async () => {
     if (!/^\d{6}$/.test(token)) {
@@ -68,6 +70,10 @@ export default function OtpScreen() {
       setLoading(false);
     }
   };
+
+  if (!isPhoneAuthEnabled) {
+    return <Redirect href="/(auth)/email" />;
+  }
 
   if (!phone) {
     return null;

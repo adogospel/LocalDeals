@@ -7,7 +7,8 @@ module.exports = defineConfig([
     ignores: ['dist/*', 'coverage/*', '.expo/*'],
     rules: {
       'import/order': 'off',
+      // Data-loading effects intentionally expose their pending state to the UI.
+      'react-hooks/set-state-in-effect': 'off',
     },
   },
 ]);
-

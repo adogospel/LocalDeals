@@ -3,6 +3,7 @@ import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 
 import { normalizeEmail } from '@/features/auth/email';
+import { env } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
 import type { AppLanguage } from '@/types/database';
 
@@ -18,11 +19,17 @@ export type SignUpProfile = {
 };
 
 export async function requestPhoneOtp(phone: string): Promise<void> {
+  if (!env.isPhoneAuthEnabled) {
+    throw new Error('La connexion par téléphone n’est pas activée.');
+  }
   const { error } = await supabase.auth.signInWithOtp({ phone });
   if (error) throw error;
 }
 
 export async function verifyPhoneOtp(phone: string, token: string): Promise<void> {
+  if (!env.isPhoneAuthEnabled) {
+    throw new Error('La connexion par téléphone n’est pas activée.');
+  }
   const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
   if (error) throw error;
 }
@@ -120,6 +127,9 @@ export async function createSessionFromUrl(url: string): Promise<void> {
 }
 
 export async function signInWithGoogle(): Promise<boolean> {
+  if (!env.isGoogleAuthEnabled) {
+    throw new Error('La connexion avec Google n’est pas activée.');
+  }
   const redirectTo = makeRedirectUri({
     scheme: 'localdeals',
     path: 'auth/callback',
