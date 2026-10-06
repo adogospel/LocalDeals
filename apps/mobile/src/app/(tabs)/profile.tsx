@@ -77,6 +77,8 @@ export default function ProfileScreen() {
         <ProfileMenuRow label={t('notifications.title')} symbol="bell.fill" onPress={() => router.push('/notifications')} />
         <View style={styles.separator} />
         <ProfileMenuRow label={t('profile.settings')} symbol="gearshape.fill" onPress={() => router.push('/settings/profile')} />
+        <View style={styles.separator} />
+        <ProfileMenuRow label={t('account.title')} symbol="hand.raised.fill" onPress={() => router.push('/settings/account')} />
       </View>
       <Button label={t('auth.logout')} variant="danger" loading={loading} onPress={() => void logout()} />
       {error ? <AppText accessibilityRole="alert" color={colors.danger} style={styles.error}>{error}</AppText> : null}

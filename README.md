@@ -33,13 +33,17 @@ Marketplace mobile locale destinée au Cameroun. Les phases 3 à 6 du MVP fourni
 - Avis publics vérifiés, limités aux participants d’une transaction terminée
 - Profils vendeurs publics avec note, avis, ventes terminées et annonces actives
 - Signalements confidentiels d’un profil, d’une annonce ou d’un message
+- Consentements juridiques versionnés avec garde obligatoire pour les comptes existants et OAuth
+- Export JSON des données personnelles depuis l’application
+- Suppression de compte Auth depuis l’application, médias effacés et transactions anonymisées
+- Protection RLS contre la réutilisation d’un ancien jeton après suppression
 - Écritures de messagerie et d’offres exclusivement via des fonctions PostgreSQL contrôlées par rôle
 - Mode développement local permettant de tester tout le parcours sans contourner Supabase en production
 - Traductions françaises et anglaises, tests, lint et CI
 
 La phase 6 est terminée et sa migration `202608290005_phase_6_trust_transactions.sql` est déployée sur le projet Supabase lié.
 
-La première phase de mise à niveau vers la production est également terminée : séparation stricte des environnements, accès développeur impossible hors développement et fournisseurs Google/SMS protégés par des drapeaux sûrs. Les dix phases sont détaillées dans [docs/TECHNICAL_ROADMAP.md](docs/TECHNICAL_ROADMAP.md) et la configuration EAS dans [docs/PRODUCTION_CONFIGURATION.md](docs/PRODUCTION_CONFIGURATION.md).
+Les phases 1 et 3 de mise à niveau vers la production sont terminées : séparation stricte des environnements, accès développeur impossible hors développement, fournisseurs Google/SMS protégés par des drapeaux sûrs, cycle de vie du compte et protection des données. Les dix phases sont détaillées dans [docs/TECHNICAL_ROADMAP.md](docs/TECHNICAL_ROADMAP.md), le déploiement de la phase 3 dans [docs/ACCOUNT_LIFECYCLE.md](docs/ACCOUNT_LIFECYCLE.md) et la configuration EAS dans [docs/PRODUCTION_CONFIGURATION.md](docs/PRODUCTION_CONFIGURATION.md).
 
 ## Architecture backend
 
@@ -149,6 +153,7 @@ supabase/
   config.toml          configuration Supabase locale
 docs/
   AUTH_SETUP.md        procédure Supabase, SMTP et Google OAuth
+  ACCOUNT_LIFECYCLE.md suppression, export, rétention et tests RLS
 ```
 
 ## Sauvegardes

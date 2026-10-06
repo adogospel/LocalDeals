@@ -14,9 +14,10 @@ import {
   createDevelopmentSession,
   type DevelopmentSession,
 } from '@/features/auth/development-session';
+import { getConsentStatus, type ConsentStatus } from '@/features/account/account-service';
 import { getProfile } from '@/features/profile/profile-service';
 import { setAppLanguage } from '@/i18n';
-import { cacheKeys, getCachedValue, removeCachedValue, setCachedValue } from '@/lib/cache';
+import { cacheKeys, clearCachedAccountData, getCachedValue, removeCachedValue, setCachedValue } from '@/lib/cache';
 import { env } from '@/lib/env';
 import { getErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -37,10 +38,14 @@ type AuthContextValue = {
   isGoogleAuthEnabled: boolean;
   isPhoneAuthEnabled: boolean;
   error: string | null;
+  consentStatus: ConsentStatus | null;
+  isConsentLoading: boolean;
   refreshProfile: () => Promise<void>;
+  refreshConsentStatus: () => Promise<void>;
   updateDevelopmentProfile: (updates: Partial<Profile>) => Promise<void>;
   signInForDevelopment: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
+  completeAccountDeletion: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -53,6 +58,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
   ));
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [consentStatus, setConsentStatus] = useState<ConsentStatus | null>(
+    developmentSession ? { hasRequiredConsents: true, requiredVersions: {} } : null,
+  );
+  const [isConsentLoading, setIsConsentLoading] = useState(
+    env.isSupabaseConfigured && !developmentSession,
+  );
   const [isLoading, setIsLoading] = useState(
     env.isSupabaseConfigured && !developmentSession,
   );
@@ -79,9 +90,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [developmentSession, loadProfile, sessionUserId]);
 
+  const refreshConsentStatus = useCallback(async () => {
+    if (developmentSession) {
+      setConsentStatus({ hasRequiredConsents: true, requiredVersions: {} });
+      return;
+    }
+    if (!sessionUserId) return;
+    setIsConsentLoading(true);
+    setError(null);
+    try {
+      setConsentStatus(await getConsentStatus());
+    } catch (nextError) {
+      setError(getErrorMessage(nextError));
+    } finally {
+      setIsConsentLoading(false);
+    }
+  }, [developmentSession, sessionUserId]);
+
   useEffect(() => {
     if (developmentSession) {
       setIsLoading(false);
+      setIsConsentLoading(false);
+      setConsentStatus({ hasRequiredConsents: true, requiredVersions: {} });
       return;
     }
 
@@ -98,9 +128,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(nextSession);
       if (!nextSession) {
         setProfile(null);
+        setConsentStatus(null);
+        setIsConsentLoading(false);
         return;
       }
-      await loadProfile(nextSession.user.id);
+      setIsConsentLoading(true);
+      const [, nextConsentStatus] = await Promise.all([
+        loadProfile(nextSession.user.id),
+        getConsentStatus(),
+      ]);
+      if (active) setConsentStatus(nextConsentStatus);
+      if (active) setIsConsentLoading(false);
     };
 
     void supabase.auth.getSession()
@@ -109,7 +147,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return syncSession(data.session);
       })
       .catch((nextError) => {
-        if (active) setError(getErrorMessage(nextError));
+        if (active) {
+          setError(getErrorMessage(nextError));
+          setIsConsentLoading(false);
+        }
       })
       .finally(() => {
         if (active) setIsLoading(false);
@@ -117,7 +158,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       void syncSession(nextSession).catch((nextError) => {
-        if (active) setError(getErrorMessage(nextError));
+        if (active) {
+          setError(getErrorMessage(nextError));
+          setIsConsentLoading(false);
+        }
       });
     });
 
@@ -163,6 +207,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (developmentSession) {
       removeCachedValue(cacheKeys.developmentSession);
       setDevelopmentSession(null);
+      setConsentStatus(null);
       setError(null);
       return;
     }
@@ -171,7 +216,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (signOutError) throw signOutError;
     setSession(null);
     setProfile(null);
+    setConsentStatus(null);
   }, [developmentSession]);
+
+  const completeAccountDeletion = useCallback(async () => {
+    clearCachedAccountData();
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } finally {
+      setSession(null);
+      setProfile(null);
+      setConsentStatus(null);
+      setError(null);
+    }
+  }, []);
 
   const authMode: AuthMode = developmentSession
     ? 'development'
@@ -197,17 +255,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isGoogleAuthEnabled: env.isGoogleAuthEnabled,
       isPhoneAuthEnabled: env.isPhoneAuthEnabled,
       error,
+      consentStatus,
+      isConsentLoading,
       refreshProfile,
+      refreshConsentStatus,
       updateDevelopmentProfile,
       signInForDevelopment,
       signOut,
+      completeAccountDeletion,
     };
   }, [
     activeProfile,
     authMode,
+    completeAccountDeletion,
+    consentStatus,
     developmentSession,
     error,
     isLoading,
+    isConsentLoading,
+    refreshConsentStatus,
     refreshProfile,
     session,
     signInForDevelopment,

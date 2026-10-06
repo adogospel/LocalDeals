@@ -27,13 +27,15 @@ Critères validés : aucun accès développeur en preview/production, aucun appe
 - choisir explicitement entre suppression de l'OTP SMS pour le MVP ou activation d'un fournisseur SMS budgété ;
 - tester création de compte, reconnexion, renouvellement de session, deep links et récupération sur appareils réels.
 
-## Phase 3 — Cycle de vie du compte et protection des données
+## Phase 3 — Cycle de vie du compte et protection des données (terminée)
 
 - suppression du compte depuis l'application ;
 - anonymisation ou suppression contrôlée des annonces, messages et médias ;
 - export des données personnelles ;
 - politique de rétention, consentements versionnés et journal d'audit ;
 - tests RLS empêchant toute lecture ou modification entre comptes.
+
+Critères validés dans le dépôt : suppression Auth initiée dans l’application, effacement récursif des médias, anonymisation transactionnelle, export JSON personnel, consentements versionnés, politique de rétention machine-readable, audit pseudonymisé à expiration et tests pgTAP de l’isolation inter-comptes et des JWT restant après suppression. Le déploiement de la migration et de la fonction Edge sur le projet hébergé est documenté dans `docs/ACCOUNT_LIFECYCLE.md`.
 
 ## Phase 4 — Confiance, sécurité et modération
 

@@ -9,6 +9,7 @@ import { cacheKeys, getCachedValue, setCachedValue } from '@/lib/cache';
 import { supabase } from '@/lib/supabase';
 import type {
   Conversation,
+  ConversationInboxState,
   ListingImage,
   Message,
   Offer,
@@ -41,7 +42,11 @@ export type ConversationPreview = {
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
+  isPinned: boolean;
+  isArchived: boolean;
 };
+
+export type ConversationInboxAction = 'pin' | 'unpin' | 'archive' | 'unarchive' | 'delete';
 
 export type ChatMessage = Message & { offer: Offer | null };
 
@@ -100,6 +105,7 @@ function buildPreview(
   messages: ChatMessage[],
   userId: string,
   language: string,
+  state?: ConversationInboxState,
 ): ConversationPreview {
   const role: ConversationRole = conversation.buyer_id === userId ? 'buyer' : 'seller';
   const readAt = role === 'buyer' ? conversation.buyer_last_read_at : conversation.seller_last_read_at;
@@ -117,6 +123,8 @@ function buildPreview(
     lastMessage: summarizeMessage(latest, language),
     lastMessageAt: latest?.created_at ?? conversation.last_message_at,
     unreadCount,
+    isPinned: Boolean(state?.pinned_at),
+    isArchived: Boolean(state?.archived_at),
   };
 }
 
@@ -126,6 +134,19 @@ function getLocalConversations(): LocalConversation[] {
 
 function getLocalMessages(): Message[] {
   return getCachedValue<Message[]>(cacheKeys.localMessages) ?? [];
+}
+
+function getLocalConversationStates(): ConversationInboxState[] {
+  return getCachedValue<ConversationInboxState[]>(cacheKeys.localConversationStates) ?? [];
+}
+
+function restoreLocalConversationState(conversationId: string): void {
+  const now = new Date().toISOString();
+  setCachedValue(cacheKeys.localConversationStates, getLocalConversationStates().map((state) => (
+    state.conversation_id === conversationId
+      ? { ...state, archived_at: null, deleted_at: null, updated_at: now }
+      : state
+  )));
 }
 
 function getLocalOffers(): Offer[] {
@@ -144,16 +165,18 @@ async function getRemoteConversationData(userId: string, language: string) {
   const profileIds = [...new Set(conversations.flatMap((conversation) => [conversation.buyer_id, conversation.seller_id]))];
   const conversationIds = conversations.map((conversation) => conversation.id);
 
-  const [listingsResult, profilesResult, messagesResult, offersResult] = await Promise.all([
+  const [listingsResult, profilesResult, messagesResult, offersResult, statesResult] = await Promise.all([
     supabase.from('listings').select('id, title, price, status, images:listing_images(storage_path, position)').in('id', listingIds),
     supabase.from('profiles').select('id, display_name, avatar_path').in('id', profileIds),
     supabase.from('messages').select('*').in('conversation_id', conversationIds).order('created_at'),
     supabase.from('offers').select('*').in('conversation_id', conversationIds),
+    supabase.from('conversation_user_states').select('*').eq('user_id', userId),
   ]);
   if (listingsResult.error) throw listingsResult.error;
   if (profilesResult.error) throw profilesResult.error;
   if (messagesResult.error) throw messagesResult.error;
   if (offersResult.error) throw offersResult.error;
+  if (statesResult.error) throw statesResult.error;
 
   const listings = listingsResult.data as unknown as ConversationListingRow[];
   const profiles = profilesResult.data as Pick<Profile, 'id' | 'display_name' | 'avatar_path'>[];
@@ -174,6 +197,7 @@ async function getRemoteConversationData(userId: string, language: string) {
   } satisfies ConversationUser]));
   const allMessages = messagesResult.data as Message[];
   const allOffers = offersResult.data as Offer[];
+  const statesByConversationId = new Map((statesResult.data as ConversationInboxState[]).map((state) => [state.conversation_id, state]));
 
   return conversations.flatMap((conversation) => {
     const listing = listingsById.get(conversation.listing_id);
@@ -184,7 +208,14 @@ async function getRemoteConversationData(userId: string, language: string) {
       allMessages.filter((message) => message.conversation_id === conversation.id),
       allOffers.filter((offer) => offer.conversation_id === conversation.id),
     );
-    return [{ conversation, listing, buyer, seller, messages }];
+    return [{ conversation, listing, buyer, seller, messages, state: statesByConversationId.get(conversation.id) }];
+  });
+}
+
+function sortConversationPreviews(items: ConversationPreview[]): ConversationPreview[] {
+  return items.sort((left, right) => {
+    if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
+    return right.lastMessageAt.localeCompare(left.lastMessageAt);
   });
 }
 
@@ -196,7 +227,13 @@ export async function getConversations(
   if (development) {
     const messages = getLocalMessages();
     const offers = getLocalOffers();
-    return getLocalConversations()
+    const statesByConversationId = new Map(
+      getLocalConversationStates()
+        .filter((state) => state.user_id === userId)
+        .map((state) => [state.conversation_id, state]),
+    );
+    return sortConversationPreviews(getLocalConversations()
+      .filter((conversation) => !statesByConversationId.get(conversation.id)?.deleted_at)
       .map((conversation) => buildPreview(
         conversation,
         conversation.listing,
@@ -205,14 +242,17 @@ export async function getConversations(
         toChatMessages(messages.filter((message) => message.conversation_id === conversation.id), offers),
         userId,
         language,
+        statesByConversationId.get(conversation.id),
       ))
-      .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+    );
   }
 
   const data = await getRemoteConversationData(userId, language);
-  return data.map(({ conversation, listing, buyer, seller, messages }) => (
-    buildPreview(conversation, listing, buyer, seller, messages, userId, language)
-  ));
+  return sortConversationPreviews(data
+    .filter(({ state }) => !state?.deleted_at)
+    .map(({ conversation, listing, buyer, seller, messages, state }) => (
+      buildPreview(conversation, listing, buyer, seller, messages, userId, language, state)
+    )));
 }
 
 export async function getConversation(
@@ -224,13 +264,15 @@ export async function getConversation(
   if (development) {
     const conversation = getLocalConversations().find((item) => item.id === conversationId);
     if (!conversation || ![conversation.buyer_id, conversation.seller_id].includes(userId)) return null;
+    const state = getLocalConversationStates().find((item) => item.conversation_id === conversationId && item.user_id === userId);
+    if (state?.deleted_at) return null;
     const messages = toChatMessages(
       getLocalMessages().filter((message) => message.conversation_id === conversation.id),
       getLocalOffers().filter((offer) => offer.conversation_id === conversation.id),
     );
     const deal = (await getDeals(userId, true)).find((item) => item.conversation_id === conversation.id && item.status !== 'cancelled') ?? null;
     return {
-      ...buildPreview(conversation, conversation.listing, conversation.buyer, conversation.seller, messages, userId, language),
+      ...buildPreview(conversation, conversation.listing, conversation.buyer, conversation.seller, messages, userId, language, state),
       messages,
       deal,
     };
@@ -238,10 +280,10 @@ export async function getConversation(
 
   const data = await getRemoteConversationData(userId, language);
   const match = data.find(({ conversation }) => conversation.id === conversationId);
-  if (!match) return null;
+  if (!match || match.state?.deleted_at) return null;
   const deal = (await getDeals(userId)).find((item) => item.conversation_id === conversationId && item.status !== 'cancelled') ?? null;
   return {
-    ...buildPreview(match.conversation, match.listing, match.buyer, match.seller, match.messages, userId, language),
+    ...buildPreview(match.conversation, match.listing, match.buyer, match.seller, match.messages, userId, language, match.state),
     messages: match.messages,
     deal,
   };
@@ -255,13 +297,18 @@ export async function getOrCreateConversation(
   if (!development) {
     const { data, error } = await supabase.rpc('get_or_create_conversation', { p_listing_id: listingId });
     if (error) throw error;
+    const { error: stateError } = await supabase.rpc('set_conversation_inbox_state', { p_action: 'unarchive', p_conversation_id: data });
+    if (stateError) throw stateError;
     return data;
   }
 
   const existing = getLocalConversations().find((conversation) => (
     conversation.listing_id === listingId && conversation.buyer_id === userId
   ));
-  if (existing) return existing.id;
+  if (existing) {
+    await updateConversationInboxState(existing.id, userId, 'unarchive', true);
+    return existing.id;
+  }
 
   const listing = await getListing(listingId, { development: true });
   if (!listing) throw new Error('Cette annonce n’est plus disponible.');
@@ -326,6 +373,7 @@ export async function sendMessage(
     kind: 'text', body: cleanBody, offer_id: null, created_at: new Date().toISOString(),
   };
   setCachedValue(cacheKeys.localMessages, [...getLocalMessages(), message]);
+  restoreLocalConversationState(conversationId);
   const recipientId = userId === conversation.buyer_id ? conversation.seller_id : conversation.buyer_id;
   addDevelopmentNotification({
     recipientId,
@@ -371,6 +419,7 @@ export async function createOffer(
     id: randomUUID(), conversation_id: conversationId, sender_id: userId,
     kind: 'offer', body: null, offer_id: offer.id, created_at: now,
   } satisfies Message]);
+  restoreLocalConversationState(conversationId);
   addDevelopmentNotification({
     recipientId: conversation.seller_id,
     actorId: userId,
@@ -419,6 +468,7 @@ export async function respondToOffer(offerId: string, userId: string, accept: bo
     id: randomUUID(), conversation_id: selectedOffer.conversation_id, sender_id: null,
     kind: 'system', body: accept ? 'offer_accepted' : 'offer_declined', offer_id: null, created_at: now,
   } satisfies Message]);
+  restoreLocalConversationState(selectedOffer.conversation_id);
   addDevelopmentNotification({
     recipientId: selectedOffer.buyer_id,
     actorId: userId,
@@ -447,6 +497,51 @@ export async function cancelOffer(offerId: string, userId: string, development =
     id: randomUUID(), conversation_id: selectedOffer.conversation_id, sender_id: null,
     kind: 'system', body: 'offer_cancelled', offer_id: null, created_at: now,
   } satisfies Message]);
+  restoreLocalConversationState(selectedOffer.conversation_id);
+}
+
+export async function updateConversationInboxState(
+  conversationId: string,
+  userId: string,
+  action: ConversationInboxAction,
+  development = false,
+): Promise<void> {
+  if (!development) {
+    const { error } = await supabase.rpc('set_conversation_inbox_state', {
+      p_action: action,
+      p_conversation_id: conversationId,
+    });
+    if (error) throw error;
+    return;
+  }
+
+  const conversation = getLocalConversations().find((item) => item.id === conversationId);
+  if (!conversation || ![conversation.buyer_id, conversation.seller_id].includes(userId)) {
+    throw new Error('Conversation indisponible.');
+  }
+
+  const now = new Date().toISOString();
+  const states = getLocalConversationStates();
+  const current = states.find((state) => state.conversation_id === conversationId && state.user_id === userId) ?? {
+    conversation_id: conversationId,
+    user_id: userId,
+    pinned_at: null,
+    archived_at: null,
+    deleted_at: null,
+    created_at: now,
+    updated_at: now,
+  };
+  const next: ConversationInboxState = {
+    ...current,
+    pinned_at: action === 'pin' ? now : ['unpin', 'archive', 'delete'].includes(action) ? null : current.pinned_at,
+    archived_at: action === 'archive' ? now : ['pin', 'unarchive', 'delete'].includes(action) ? null : current.archived_at,
+    deleted_at: action === 'delete' ? now : ['pin', 'archive', 'unarchive'].includes(action) ? null : current.deleted_at,
+    updated_at: now,
+  };
+  setCachedValue(cacheKeys.localConversationStates, [
+    next,
+    ...states.filter((state) => state.conversation_id !== conversationId || state.user_id !== userId),
+  ]);
 }
 
 export async function markConversationRead(
@@ -482,6 +577,7 @@ export function subscribeToInbox(onChange: () => void): () => void {
   const channel = supabase
     .channel('inbox')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_user_states' }, onChange)
     .subscribe();
   return () => { void supabase.removeChannel(channel); };
 }

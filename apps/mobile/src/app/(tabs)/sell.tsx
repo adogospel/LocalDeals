@@ -107,7 +107,15 @@ export default function SellScreen() {
     if (!user || !profile) return;
     const result = listingSchema.safeParse({ ...draft, price: parsePriceInput(draft.priceText) });
     if (!result.success) {
-      setError(result.error.issues[0].path[0] === 'photos' ? t('sell.photoRequired') : t('sell.formIncomplete'));
+      const invalidField = result.error.issues[0]?.path[0];
+      if (invalidField === 'photos') setError(t('sell.photoRequired'));
+      else if (invalidField === 'title') setError(t('sell.titleInvalid'));
+      else if (invalidField === 'price') setError(t('sell.priceInvalid'));
+      else if (invalidField === 'description') setError(t('sell.descriptionInvalid'));
+      else if (invalidField === 'categoryId') setError(t('sell.categoryRequired'));
+      else if (invalidField === 'cityId') setError(t('sell.cityRequired'));
+      else if (invalidField === 'neighborhoodId') setError(t('sell.neighborhoodRequired'));
+      else setError(t('sell.formIncomplete'));
       return;
     }
     const category = categories.find((item) => item.id === result.data.categoryId);
@@ -171,7 +179,7 @@ export default function SellScreen() {
               const selected = draft.categoryId === category.id;
               const label = i18n.language.startsWith('en') ? category.label_en : category.label_fr;
               return (
-                <Pressable key={category.id} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => setDraft((current) => ({ ...current, categoryId: category.id }))} style={[styles.categoryChip, selected && styles.categoryChipSelected]}>
+                <Pressable key={category.id} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => { setDraft((current) => ({ ...current, categoryId: category.id })); setError(null); }} style={[styles.categoryChip, selected && styles.categoryChipSelected]}>
                   <SymbolView name={category.symbol as SymbolViewProps['name']} size={16} tintColor={selected ? colors.surface : colors.orange} />
                   <AppText variant="caption" color={selected ? colors.surface : colors.ink}>{label}</AppText>
                 </Pressable>
@@ -201,7 +209,14 @@ export default function SellScreen() {
 
       <View style={styles.card}>
         <SectionHeading step="3" title={t('sell.locationTitle')} subtitle={t('sell.locationSubtitle')} />
-        <LocationFields value={draft} onChange={(location) => setDraft((current) => ({ ...current, ...location }))} />
+        <LocationFields
+          value={draft}
+          allowCustomLocations={false}
+          onChange={(location) => {
+            setDraft((current) => ({ ...current, ...location }));
+            setError(null);
+          }}
+        />
       </View>
 
       <View style={styles.safetyCard}>

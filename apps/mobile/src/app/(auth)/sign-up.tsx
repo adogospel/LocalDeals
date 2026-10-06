@@ -1,7 +1,7 @@
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AuthShell } from '@/components/auth/auth-shell';
@@ -36,6 +36,7 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -59,6 +60,10 @@ export default function SignUpScreen() {
     }
     if (password !== passwordConfirmation) {
       setError(t('emailAuth.passwordMismatch'));
+      return;
+    }
+    if (!legalAccepted) {
+      setError(t('account.mustAccept'));
       return;
     }
 
@@ -149,6 +154,33 @@ export default function SignUpScreen() {
           />
         </View>
 
+        <View style={styles.legalCard}>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: legalAccepted }}
+            onPress={() => { setLegalAccepted((value) => !value); setError(null); }}
+            style={({ pressed }) => [styles.checkboxRow, pressed && styles.checkboxPressed]}
+          >
+            <SymbolView
+              name={legalAccepted ? 'checkmark.square.fill' : 'square'}
+              size={24}
+              tintColor={legalAccepted ? colors.orange : colors.muted}
+            />
+            <AppText variant="caption" color={colors.slate} style={styles.checkboxCopy}>
+              {t('account.signUpConsent')}
+            </AppText>
+          </Pressable>
+          <View style={styles.legalLinks}>
+            <Pressable accessibilityRole="link" onPress={() => router.push('/legal/terms')}>
+              <AppText variant="caption" color={colors.orange}>{t('account.termsTitle')}</AppText>
+            </Pressable>
+            <AppText variant="caption" color={colors.muted}>·</AppText>
+            <Pressable accessibilityRole="link" onPress={() => router.push('/legal/privacy')}>
+              <AppText variant="caption" color={colors.orange}>{t('account.privacyTitle')}</AppText>
+            </Pressable>
+          </View>
+        </View>
+
         {error ? <AppText color={colors.danger} accessibilityRole="alert">{error}</AppText> : null}
         <Button
           label={t('emailAuth.createMyAccount')}
@@ -175,5 +207,10 @@ const styles = StyleSheet.create({
   sectionCopy: { flex: 1, gap: 2 },
   passwordHint: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: -spacing.sm },
   passwordHintText: { flex: 1, lineHeight: 18 },
+  legalCard: { gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, backgroundColor: colors.surface, padding: spacing.md },
+  checkboxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderRadius: radii.sm },
+  checkboxPressed: { opacity: 0.72 },
+  checkboxCopy: { flex: 1, lineHeight: 19 },
+  legalLinks: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm, paddingLeft: 32 },
   terms: { textAlign: 'center', lineHeight: 18, paddingHorizontal: spacing.md },
 });

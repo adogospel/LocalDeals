@@ -28,13 +28,13 @@ describe('listing validation', () => {
     expect(listingSchema.safeParse({ ...validListing, photos: [] }).success).toBe(false);
   });
 
-  it('requires a custom location when reference ids are absent', () => {
+  it('requires catalog city and neighborhood selections', () => {
     const result = listingSchema.safeParse({
       ...validListing,
       cityId: null,
       neighborhoodId: null,
-      customCity: '',
-      customNeighborhood: '',
+      customCity: 'Douala',
+      customNeighborhood: 'Bonapriso',
     });
     expect(result.success).toBe(false);
   });

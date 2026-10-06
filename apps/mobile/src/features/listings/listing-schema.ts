@@ -35,11 +35,11 @@ export const listingSchema = z.object({
     height: z.number().positive(),
   })).min(1).max(MAX_LISTING_PHOTOS),
 }).superRefine((values, context) => {
-  if (!values.cityId && values.customCity.length < 2) {
-    context.addIssue({ code: 'custom', path: ['customCity'], message: 'city_required' });
+  if (!values.cityId) {
+    context.addIssue({ code: 'custom', path: ['cityId'], message: 'city_required' });
   }
-  if (!values.neighborhoodId && values.customNeighborhood.length < 2) {
-    context.addIssue({ code: 'custom', path: ['customNeighborhood'], message: 'neighborhood_required' });
+  if (!values.neighborhoodId) {
+    context.addIssue({ code: 'custom', path: ['neighborhoodId'], message: 'neighborhood_required' });
   }
   values.photos.forEach((photo, index) => {
     if (photo.fileSize && photo.fileSize > MAX_LISTING_IMAGE_BYTES) {

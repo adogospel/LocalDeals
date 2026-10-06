@@ -32,6 +32,8 @@ export function createDevelopmentSession(email: string): DevelopmentSession {
       custom_neighborhood: 'Bonapriso',
       preferred_language: 'fr',
       onboarding_completed: true,
+      account_status: 'active',
+      deleted_at: null,
       created_at: now,
       updated_at: now,
     },

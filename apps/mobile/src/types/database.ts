@@ -1,4 +1,7 @@
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 export type AppLanguage = 'fr' | 'en';
+export type AccountStatus = 'active' | 'deleted';
+export type LegalDocumentType = 'terms' | 'privacy';
 export type ListingCondition = 'new' | 'like_new' | 'good' | 'fair';
 export type ListingStatus = 'draft' | 'published' | 'reserved' | 'sold' | 'archived';
 export type MessageKind = 'text' | 'offer' | 'system';
@@ -39,7 +42,48 @@ export type Profile = {
   custom_neighborhood: string | null;
   preferred_language: AppLanguage;
   onboarding_completed: boolean;
+  account_status: AccountStatus;
+  deleted_at: string | null;
   created_at: string;
+  updated_at: string;
+};
+
+export type LegalDocumentVersion = {
+  id: string;
+  document_type: LegalDocumentType;
+  version: string;
+  title_fr: string;
+  title_en: string;
+  effective_at: string;
+  requires_consent: boolean;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type UserConsent = {
+  id: string;
+  user_id: string;
+  document_version_id: string;
+  source: 'sign_up' | 'in_app';
+  accepted_at: string;
+};
+
+export type AccountAuditEvent = {
+  id: string;
+  user_id: string | null;
+  subject_fingerprint: string;
+  event_type: 'legal_consent_accepted' | 'data_export_created' | 'account_deletion_prepared' | 'account_deletion_completed' | 'account_deletion_failed';
+  metadata: Json;
+  occurred_at: string;
+  expires_at: string;
+};
+
+export type DataRetentionPolicy = {
+  data_class: string;
+  retention_days: number | null;
+  action_on_deletion: 'delete' | 'anonymize' | 'retain_then_delete';
+  purpose_fr: string;
+  purpose_en: string;
   updated_at: string;
 };
 
@@ -99,6 +143,16 @@ export type Conversation = {
   buyer_last_read_at: string | null;
   seller_last_read_at: string | null;
   last_message_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationInboxState = {
+  conversation_id: string;
+  user_id: string;
+  pinned_at: string | null;
+  archived_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -221,6 +275,16 @@ type ListingImageInsert = Omit<ListingImage, 'id' | 'created_at'> & {
 export type Database = {
   public: {
     Tables: {
+      account_audit_events: {
+        Row: AccountAuditEvent;
+        Insert: Omit<AccountAuditEvent, 'id' | 'occurred_at' | 'expires_at'> & {
+          id?: string;
+          occurred_at?: string;
+          expires_at?: string;
+        };
+        Update: Partial<Pick<AccountAuditEvent, 'user_id' | 'metadata' | 'expires_at'>>;
+        Relationships: [];
+      };
       categories: {
         Row: Category;
         Insert: CategoryInsert;
@@ -257,6 +321,18 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      data_retention_policies: {
+        Row: DataRetentionPolicy;
+        Insert: Omit<DataRetentionPolicy, 'updated_at'> & { updated_at?: string };
+        Update: Partial<Omit<DataRetentionPolicy, 'data_class'>>;
+        Relationships: [];
+      };
+      legal_document_versions: {
+        Row: LegalDocumentVersion;
+        Insert: Omit<LegalDocumentVersion, 'id' | 'created_at'> & { id?: string; created_at?: string };
+        Update: Partial<Omit<LegalDocumentVersion, 'id' | 'document_type' | 'version' | 'created_at'>>;
+        Relationships: [];
+      };
       conversations: {
         Row: Conversation;
         Insert: Omit<Conversation, 'id' | 'last_message_at' | 'created_at' | 'updated_at'> & {
@@ -266,6 +342,15 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Pick<Conversation, 'buyer_last_read_at' | 'seller_last_read_at' | 'last_message_at' | 'updated_at'>>;
+        Relationships: [];
+      };
+      conversation_user_states: {
+        Row: ConversationInboxState;
+        Insert: Omit<ConversationInboxState, 'created_at' | 'updated_at'> & {
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Pick<ConversationInboxState, 'pinned_at' | 'archived_at' | 'deleted_at' | 'updated_at'>>;
         Relationships: [];
       };
       offers: {
@@ -324,10 +409,18 @@ export type Database = {
           custom_neighborhood?: string | null;
           preferred_language?: AppLanguage;
           onboarding_completed?: boolean;
+          account_status?: AccountStatus;
+          deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Omit<Profile, 'id' | 'created_at'>>;
+        Relationships: [];
+      };
+      user_consents: {
+        Row: UserConsent;
+        Insert: Omit<UserConsent, 'id' | 'accepted_at'> & { id?: string; accepted_at?: string };
+        Update: never;
         Relationships: [];
       };
     };
@@ -339,6 +432,7 @@ export type Database = {
       mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined };
       respond_to_conversation_offer: { Args: { p_accept: boolean; p_offer_id: string }; Returns: undefined };
       send_conversation_message: { Args: { p_body: string; p_conversation_id: string }; Returns: string };
+      set_conversation_inbox_state: { Args: { p_action: string; p_conversation_id: string }; Returns: undefined };
       cancel_deal: { Args: { p_deal_id: string }; Returns: undefined };
       confirm_deal_handover: { Args: { p_deal_id: string }; Returns: undefined };
       mark_all_notifications_read: { Args: Record<PropertyKey, never>; Returns: undefined };
@@ -346,9 +440,14 @@ export type Database = {
       submit_deal_review: { Args: { p_comment?: string | null; p_deal_id: string; p_score: number }; Returns: string };
       submit_report: { Args: { p_details?: string | null; p_reason: ReportReason; p_target_id: string; p_target_type: string }; Returns: string };
       get_public_profile_stats: { Args: { p_user_id: string }; Returns: { average_rating: number; completed_sales: number; review_count: number }[] };
+      accept_required_legal_documents: { Args: Record<PropertyKey, never>; Returns: Json };
+      export_my_personal_data: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_my_consent_status: { Args: Record<PropertyKey, never>; Returns: Json };
     };
     Enums: {
+      account_status: AccountStatus;
       app_language: AppLanguage;
+      legal_document_type: LegalDocumentType;
       listing_condition: ListingCondition;
       listing_status: ListingStatus;
       message_kind: MessageKind;

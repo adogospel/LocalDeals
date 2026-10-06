@@ -3,6 +3,7 @@ import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 
 import { normalizeEmail } from '@/features/auth/email';
+import { SIGN_UP_LEGAL_CONSENTS } from '@/features/account/legal-documents';
 import { env } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
 import type { AppLanguage } from '@/types/database';
@@ -58,6 +59,7 @@ export async function signUpWithEmail(
         neighborhood_id: profile.neighborhoodId,
         custom_neighborhood: profile.neighborhoodId ? null : profile.customNeighborhood.trim(),
         preferred_language: profile.preferredLanguage,
+        legal_consents: SIGN_UP_LEGAL_CONSENTS,
       },
     },
   });

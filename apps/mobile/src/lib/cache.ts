@@ -1,4 +1,4 @@
-import 'expo-sqlite/localStorage/install';
+import './install-local-storage';
 
 const PREFIX = 'localdeals:';
 
@@ -10,6 +10,7 @@ export const cacheKeys = {
   localListings: `${PREFIX}development-listings`,
   localFavorites: `${PREFIX}development-favorites`,
   localConversations: `${PREFIX}development-conversations`,
+  localConversationStates: `${PREFIX}development-conversation-states`,
   localMessages: `${PREFIX}development-messages`,
   localOffers: `${PREFIX}development-offers`,
   localDeals: `${PREFIX}development-deals`,
@@ -44,5 +45,19 @@ export function removeCachedValue(key: string): void {
     localStorage.removeItem(key);
   } catch {
     // Cache cleanup is best effort.
+  }
+}
+
+export function clearCachedAccountData(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(PREFIX) && key !== cacheKeys.language) keysToRemove.push(key);
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Account deletion already happened on the server; local cleanup is best effort.
   }
 }

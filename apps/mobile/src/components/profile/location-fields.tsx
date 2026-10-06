@@ -22,11 +22,12 @@ export type LocationValues = {
 type LocationFieldsProps = {
   value: LocationValues;
   onChange: (value: LocationValues) => void;
+  allowCustomLocations?: boolean;
 };
 
 type PickerMode = 'city' | 'neighborhood' | null;
 
-export function LocationFields({ value, onChange }: LocationFieldsProps) {
+export function LocationFields({ value, onChange, allowCustomLocations = true }: LocationFieldsProps) {
   const { t } = useTranslation();
   const [cities, setCities] = useState<City[]>([]);
   const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([]);
@@ -113,10 +114,12 @@ export function LocationFields({ value, onChange }: LocationFieldsProps) {
     setPickerMode(null);
   };
 
-  const selectedCityLabel = customCitySelected ? value.customCity : value.cityName;
+  const isCustomCity = allowCustomLocations && customCitySelected;
+  const isCustomNeighborhood = allowCustomLocations && customNeighborhoodSelected;
+  const selectedCityLabel = isCustomCity ? value.customCity : value.cityId ? value.cityName : '';
   const selectedNeighborhoodLabel = value.neighborhoodId
     ? value.neighborhoodName
-    : value.customNeighborhood;
+    : isCustomNeighborhood ? value.customNeighborhood : '';
 
   return (
     <View style={styles.container}>
@@ -140,7 +143,7 @@ export function LocationFields({ value, onChange }: LocationFieldsProps) {
         </Pressable>
       </View>
 
-      {customCitySelected ? (
+      {isCustomCity ? (
         <TextField
           label={t('profile.otherCityLabel')}
           placeholder={t('profile.otherCityPlaceholder')}
@@ -151,7 +154,7 @@ export function LocationFields({ value, onChange }: LocationFieldsProps) {
         />
       ) : null}
 
-      {!customCitySelected ? <View style={styles.fieldGroup}>
+      {!isCustomCity ? <View style={styles.fieldGroup}>
         <AppText variant="bodyStrong">{t('profile.neighborhoodLabel')}</AppText>
         <Pressable
           accessibilityRole="button"
@@ -176,7 +179,7 @@ export function LocationFields({ value, onChange }: LocationFieldsProps) {
         </Pressable>
       </View> : null}
 
-      {customCitySelected || customNeighborhoodSelected ? (
+      {isCustomCity || isCustomNeighborhood ? (
         <TextField
           label={t('profile.otherNeighborhoodLabel')}
           placeholder={t('profile.otherNeighborhoodPlaceholder')}
@@ -252,19 +255,21 @@ export function LocationFields({ value, onChange }: LocationFieldsProps) {
                   </Pressable>
                 );
               })}
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => pickerMode === 'city' ? chooseCity(null) : chooseNeighborhood(null)}
-                style={[styles.option, styles.otherOption]}
-              >
-                <View style={styles.otherIcon}>
-                  <SymbolView name="plus" size={15} tintColor={colors.orange} />
-                </View>
-                <View style={styles.otherCopy}>
-                  <AppText variant="bodyStrong">{t('profile.otherOption')}</AppText>
-                  <AppText variant="caption" color={colors.slate}>{t('profile.otherOptionHint')}</AppText>
-                </View>
-              </Pressable>
+              {allowCustomLocations ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => pickerMode === 'city' ? chooseCity(null) : chooseNeighborhood(null)}
+                  style={[styles.option, styles.otherOption]}
+                >
+                  <View style={styles.otherIcon}>
+                    <SymbolView name="plus" size={15} tintColor={colors.orange} />
+                  </View>
+                  <View style={styles.otherCopy}>
+                    <AppText variant="bodyStrong">{t('profile.otherOption')}</AppText>
+                    <AppText variant="caption" color={colors.slate}>{t('profile.otherOptionHint')}</AppText>
+                  </View>
+                </Pressable>
+              ) : null}
             </ScrollView>
           </Pressable>
         </Pressable>
