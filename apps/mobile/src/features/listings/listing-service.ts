@@ -16,6 +16,7 @@ import type {
 
 import { listings as mockListings, type Listing } from './mock-listings';
 import {
+  buildOrderedPrefixSearchQuery,
   filterAndSortListings,
   type ListingFilters,
 } from './listing-filters';
@@ -171,8 +172,9 @@ export async function getListings(
     .in('status', ['published', 'reserved'])
     .limit(options.limit ?? 40);
 
-  if (filters.query?.trim()) {
-    request = request.textSearch('search_vector', filters.query.trim(), { type: 'websearch', config: 'simple' });
+  const searchQuery = buildOrderedPrefixSearchQuery(filters.query ?? '');
+  if (searchQuery) {
+    request = request.textSearch('search_vector', searchQuery, { config: 'simple' });
   }
   if (filters.categoryId != null) request = request.eq('category_id', filters.categoryId);
   if (filters.condition) request = request.eq('condition', filters.condition);

@@ -56,6 +56,7 @@ export default function SearchScreen() {
   const [categories, setCategories] = useState<Category[]>(authMode === 'development' ? fallbackCategories : []);
   const [results, setResults] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterError, setFilterError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -90,7 +91,12 @@ export default function SearchScreen() {
     }, { development: authMode === 'development', language: i18n.language })
       .then((items) => { if (active) setResults(items); })
       .catch((nextError) => { if (active) setError(getErrorMessage(nextError)); })
-      .finally(() => { if (active) setLoading(false); });
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+          setInitialLoadComplete(true);
+        }
+      });
     return () => { active = false; };
   }, [authMode, categoryId, condition, deferredQuery, i18n.language, maxPriceText, minPriceText, refreshKey, sort]);
 
@@ -176,8 +182,10 @@ export default function SearchScreen() {
           placeholderTextColor={colors.muted}
           returnKeyType="search"
           autoCorrect={false}
+          autoCapitalize="none"
           style={styles.searchInput}
         />
+        {loading && initialLoadComplete ? <ActivityIndicator size="small" color={colors.orange} /> : null}
         {query ? (
           <Pressable accessibilityRole="button" accessibilityLabel={t('search.clear')} hitSlop={8} onPress={() => setQuery('')}>
             <SymbolView name="xmark.circle.fill" size={18} tintColor={colors.muted} />
@@ -213,7 +221,7 @@ export default function SearchScreen() {
         </View>
       </View>
 
-      {loading ? (
+      {loading && !initialLoadComplete ? (
         <View style={styles.state}><ActivityIndicator color={colors.orange} /><AppText color={colors.slate}>{t('common.loading')}</AppText></View>
       ) : error ? (
         <View style={styles.state}>

@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -35,11 +35,60 @@ function formatConversationTime(value: string, language: string): string {
   return new Intl.DateTimeFormat(language, { day: '2-digit', month: 'short' }).format(date);
 }
 
+type ConversationActionRowProps = {
+  label: string;
+  description: string;
+  symbol: SymbolViewProps['name'];
+  loading: boolean;
+  disabled: boolean;
+  destructive?: boolean;
+  separated?: boolean;
+  onPress: () => void;
+};
+
+function ConversationActionRow({
+  label,
+  description,
+  symbol,
+  loading,
+  disabled,
+  destructive = false,
+  separated = false,
+  onPress,
+}: ConversationActionRowProps) {
+  const tintColor = destructive ? colors.danger : colors.orange;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={description}
+      accessibilityState={{ busy: loading, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.actionRow,
+        separated ? styles.actionRowSeparated : null,
+        pressed ? styles.actionPressed : null,
+      ]}
+    >
+      <View style={[styles.actionIcon, destructive ? styles.deleteIcon : null]}>
+        <SymbolView name={symbol} size={18} tintColor={tintColor} />
+      </View>
+      <View style={styles.actionCopy}>
+        <AppText variant="bodyStrong" color={destructive ? colors.danger : colors.ink}>{label}</AppText>
+        <AppText variant="caption" color={colors.slate} style={styles.actionDescription}>{description}</AppText>
+      </View>
+      {loading ? <ActivityIndicator size="small" color={tintColor} /> : null}
+    </Pressable>
+  );
+}
+
 export default function MessagesScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const { authMode, user } = useAuth();
   const [conversations, setConversations] = useState<ConversationPreview[]>([]);
+  const hasLoadedConversations = useRef(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [loading, setLoading] = useState(true);
@@ -47,6 +96,7 @@ export default function MessagesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<ConversationPreview | null>(null);
   const [actionLoading, setActionLoading] = useState<ConversationInboxAction | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const loadConversations = useCallback(async (silent = false) => {
     if (!user) return;
@@ -57,12 +107,15 @@ export default function MessagesScreen() {
     } catch (nextError) {
       setError(getErrorMessage(nextError));
     } finally {
+      hasLoadedConversations.current = true;
       setLoading(false);
       setRefreshing(false);
     }
   }, [authMode, i18n.language, user]);
 
-  useFocusEffect(useCallback(() => { void loadConversations(); }, [loadConversations]));
+  useFocusEffect(useCallback(() => {
+    void loadConversations(hasLoadedConversations.current);
+  }, [loadConversations]));
 
   useEffect(() => {
     if (authMode !== 'supabase') return;
@@ -96,7 +149,7 @@ export default function MessagesScreen() {
   const applyInboxAction = async (action: ConversationInboxAction) => {
     if (!selectedConversation || !user || actionLoading) return;
     setActionLoading(action);
-    setError(null);
+    setActionError(null);
     try {
       await updateConversationInboxState(
         selectedConversation.id,
@@ -107,7 +160,7 @@ export default function MessagesScreen() {
       setSelectedConversation(null);
       await loadConversations(true);
     } catch (nextError) {
-      setError(getErrorMessage(nextError));
+      setActionError(getErrorMessage(nextError));
     } finally {
       setActionLoading(null);
     }
@@ -148,7 +201,13 @@ export default function MessagesScreen() {
         ) : null}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        style={styles.filterScroller}
+        contentContainerStyle={styles.filters}
+      >
         {filters.map((item) => (
           <Pressable
             key={item.id}
@@ -167,7 +226,7 @@ export default function MessagesScreen() {
         <AppText variant="caption" color={colors.muted}>{t('messages.longPressHint')}</AppText>
       </View>
 
-      {loading ? (
+      {loading && conversations.length === 0 ? (
         <View style={styles.centerState}><ActivityIndicator color={colors.orange} /></View>
       ) : (
         <FlatList
@@ -183,7 +242,10 @@ export default function MessagesScreen() {
               accessibilityLabel={`${item.otherUser.name}, ${item.listing.title}`}
               accessibilityHint={t('messages.longPressHint')}
               onPress={() => router.push({ pathname: '/conversation/[id]', params: { id: item.id } })}
-              onLongPress={() => setSelectedConversation(item)}
+              onLongPress={() => {
+                setActionError(null);
+                setSelectedConversation(item);
+              }}
               delayLongPress={450}
               style={({ pressed }) => [styles.card, item.isPinned ? styles.cardPinned : null, pressed ? styles.cardPressed : null]}
             >
@@ -228,7 +290,7 @@ export default function MessagesScreen() {
       <Modal
         visible={selectedConversation !== null}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => { if (!actionLoading) setSelectedConversation(null); }}
       >
         <View style={styles.actionBackdrop}>
@@ -242,44 +304,81 @@ export default function MessagesScreen() {
           <SafeAreaView edges={['bottom']} style={styles.actionSheet}>
             <View style={styles.sheetHandle} />
             {selectedConversation ? (
-              <View style={styles.actionHeader}>
-                <Avatar path={selectedConversation.otherUser.avatarPath} name={selectedConversation.otherUser.name} size={44} />
-                <View style={styles.actionHeaderCopy}>
-                  <AppText variant="title" numberOfLines={1}>{selectedConversation.otherUser.name}</AppText>
-                  <AppText variant="caption" color={colors.slate} numberOfLines={1}>{selectedConversation.listing.title}</AppText>
-                </View>
-                <Pressable accessibilityRole="button" accessibilityLabel={t('common.cancel')} disabled={Boolean(actionLoading)} onPress={() => setSelectedConversation(null)} style={styles.closeButton}>
-                  <SymbolView name="xmark" size={15} tintColor={colors.ink} />
-                </Pressable>
-              </View>
-            ) : null}
-
-            {selectedConversation?.isArchived ? (
-              <Pressable disabled={Boolean(actionLoading)} onPress={() => void applyInboxAction('unarchive')} style={({ pressed }) => [styles.actionRow, pressed ? styles.actionPressed : null]}>
-                <View style={styles.actionIcon}><SymbolView name="archivebox.fill" size={18} tintColor={colors.orange} /></View>
-                <AppText variant="bodyStrong" style={styles.actionLabel}>{t('messages.unarchive')}</AppText>
-                {actionLoading === 'unarchive' ? <ActivityIndicator size="small" color={colors.orange} /> : <SymbolView name="chevron.right" size={13} tintColor={colors.muted} />}
-              </Pressable>
-            ) : (
               <>
-                <Pressable disabled={Boolean(actionLoading)} onPress={() => void applyInboxAction(selectedConversation?.isPinned ? 'unpin' : 'pin')} style={({ pressed }) => [styles.actionRow, pressed ? styles.actionPressed : null]}>
-                  <View style={styles.actionIcon}><SymbolView name="pin.fill" size={18} tintColor={colors.orange} /></View>
-                  <AppText variant="bodyStrong" style={styles.actionLabel}>{selectedConversation?.isPinned ? t('messages.unpin') : t('messages.pin')}</AppText>
-                  {actionLoading === 'pin' || actionLoading === 'unpin' ? <ActivityIndicator size="small" color={colors.orange} /> : <SymbolView name="chevron.right" size={13} tintColor={colors.muted} />}
-                </Pressable>
-                <Pressable disabled={Boolean(actionLoading)} onPress={() => void applyInboxAction('archive')} style={({ pressed }) => [styles.actionRow, pressed ? styles.actionPressed : null]}>
-                  <View style={styles.actionIcon}><SymbolView name="archivebox.fill" size={18} tintColor={colors.orange} /></View>
-                  <AppText variant="bodyStrong" style={styles.actionLabel}>{t('messages.archive')}</AppText>
-                  {actionLoading === 'archive' ? <ActivityIndicator size="small" color={colors.orange} /> : <SymbolView name="chevron.right" size={13} tintColor={colors.muted} />}
+                <View style={styles.actionHeader}>
+                  <View style={styles.actionVisuals}>
+                    <Image source={{ uri: selectedConversation.listing.imageUrl }} style={styles.actionListingImage} contentFit="cover" />
+                    <View style={styles.actionAvatarWrap}>
+                      <Avatar path={selectedConversation.otherUser.avatarPath} name={selectedConversation.otherUser.name} size={28} />
+                    </View>
+                  </View>
+                  <View style={styles.actionHeaderCopy}>
+                    <AppText variant="caption" color={colors.orange} style={styles.actionEyebrow}>{t('messages.actionsTitle')}</AppText>
+                    <AppText variant="title" numberOfLines={1}>{selectedConversation.otherUser.name}</AppText>
+                    <AppText variant="caption" color={colors.slate} numberOfLines={1}>{selectedConversation.listing.title}</AppText>
+                  </View>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t('common.cancel')} disabled={Boolean(actionLoading)} onPress={() => setSelectedConversation(null)} style={styles.closeButton}>
+                    <SymbolView name="xmark" size={15} tintColor={colors.ink} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.actionGroup}>
+                  {selectedConversation.isArchived ? (
+                    <ConversationActionRow
+                      label={t('messages.unarchive')}
+                      description={t('messages.unarchiveHint')}
+                      symbol="archivebox.fill"
+                      loading={actionLoading === 'unarchive'}
+                      disabled={Boolean(actionLoading)}
+                      onPress={() => void applyInboxAction('unarchive')}
+                    />
+                  ) : (
+                    <>
+                      <ConversationActionRow
+                        label={selectedConversation.isPinned ? t('messages.unpin') : t('messages.pin')}
+                        description={selectedConversation.isPinned ? t('messages.unpinHint') : t('messages.pinHint')}
+                        symbol="pin.fill"
+                        loading={actionLoading === 'pin' || actionLoading === 'unpin'}
+                        disabled={Boolean(actionLoading)}
+                        onPress={() => void applyInboxAction(selectedConversation.isPinned ? 'unpin' : 'pin')}
+                      />
+                      <ConversationActionRow
+                        label={t('messages.archive')}
+                        description={t('messages.archiveHint')}
+                        symbol="archivebox.fill"
+                        loading={actionLoading === 'archive'}
+                        disabled={Boolean(actionLoading)}
+                        separated
+                        onPress={() => void applyInboxAction('archive')}
+                      />
+                    </>
+                  )}
+                </View>
+
+                <View style={[styles.actionGroup, styles.deleteGroup]}>
+                  <ConversationActionRow
+                    label={t('messages.delete')}
+                    description={t('messages.deleteHint')}
+                    symbol="trash.fill"
+                    loading={actionLoading === 'delete'}
+                    disabled={Boolean(actionLoading)}
+                    destructive
+                    onPress={confirmDelete}
+                  />
+                </View>
+
+                {actionError ? (
+                  <View style={styles.actionError}>
+                    <SymbolView name="exclamationmark.circle.fill" size={16} tintColor={colors.danger} />
+                    <AppText accessibilityRole="alert" variant="caption" color={colors.danger} style={styles.actionErrorText}>{actionError}</AppText>
+                  </View>
+                ) : null}
+
+                <Pressable accessibilityRole="button" disabled={Boolean(actionLoading)} onPress={() => setSelectedConversation(null)} style={({ pressed }) => [styles.cancelButton, pressed ? styles.actionPressed : null]}>
+                  <AppText variant="bodyStrong" color={colors.slate}>{t('common.cancel')}</AppText>
                 </Pressable>
               </>
-            )}
-
-            <Pressable disabled={Boolean(actionLoading)} onPress={confirmDelete} style={({ pressed }) => [styles.actionRow, styles.deleteAction, pressed ? styles.actionPressed : null]}>
-              <View style={[styles.actionIcon, styles.deleteIcon]}><SymbolView name="trash.fill" size={18} tintColor={colors.danger} /></View>
-              <AppText variant="bodyStrong" color={colors.danger} style={styles.actionLabel}>{t('messages.delete')}</AppText>
-              {actionLoading === 'delete' ? <ActivityIndicator size="small" color={colors.danger} /> : <SymbolView name="chevron.right" size={13} tintColor={colors.muted} />}
-            </Pressable>
+            ) : null}
           </SafeAreaView>
         </View>
       </Modal>
@@ -295,8 +394,9 @@ const styles = StyleSheet.create({
   headerIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: colors.orangeSoft },
   searchBar: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, backgroundColor: colors.surface, paddingHorizontal: spacing.md },
   searchInput: { flex: 1, minHeight: 50, color: colors.ink, fontFamily: typography.regular, fontSize: 14 },
-  filters: { gap: 7, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm },
-  filter: { minHeight: 34, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radii.pill, backgroundColor: colors.surface, paddingHorizontal: 12 },
+  filterScroller: { flexGrow: 0, flexShrink: 0, height: 58 },
+  filters: { alignItems: 'center', gap: 7, paddingHorizontal: spacing.lg, paddingVertical: 10 },
+  filter: { height: 36, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: radii.pill, backgroundColor: colors.surface, paddingHorizontal: 13 },
   filterActive: { borderColor: colors.ink, backgroundColor: colors.ink },
   longPressHint: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -325,15 +425,25 @@ const styles = StyleSheet.create({
   emptyBody: { maxWidth: 300, textAlign: 'center' },
   error: { position: 'absolute', left: spacing.lg, right: spacing.lg, bottom: spacing.md, borderRadius: radii.sm, backgroundColor: colors.dangerSoft, padding: 10 },
   actionBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(23,32,51,0.42)' },
-  actionSheet: { gap: spacing.sm, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingTop: 10 },
+  actionSheet: { maxHeight: '84%', gap: 12, overflow: 'hidden', borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingTop: 10, paddingBottom: spacing.sm },
   sheetHandle: { width: 42, height: 5, alignSelf: 'center', borderRadius: 3, backgroundColor: colors.border },
-  actionHeader: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  actionHeaderCopy: { flex: 1, gap: 2 },
+  actionHeader: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  actionVisuals: { width: 62, height: 58 },
+  actionListingImage: { width: 54, height: 54, borderRadius: 16, backgroundColor: colors.border },
+  actionAvatarWrap: { position: 'absolute', right: 0, bottom: 0, padding: 2, borderRadius: 18, backgroundColor: colors.surface },
+  actionHeaderCopy: { flex: 1, gap: 1 },
+  actionEyebrow: { fontSize: 9, letterSpacing: 0.7 },
   closeButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 19, backgroundColor: colors.background },
-  actionRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: radii.md, paddingHorizontal: spacing.sm },
+  actionGroup: { overflow: 'hidden', borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, backgroundColor: colors.surface },
+  deleteGroup: { borderColor: '#F5D0D0', backgroundColor: '#FFFDFD' },
+  actionRow: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  actionRowSeparated: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   actionPressed: { backgroundColor: colors.background },
   actionIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: colors.orangeSoft },
-  actionLabel: { flex: 1 },
-  deleteAction: { marginTop: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border, borderRadius: 0, paddingTop: spacing.sm },
+  actionCopy: { flex: 1, gap: 2 },
+  actionDescription: { lineHeight: 17 },
   deleteIcon: { backgroundColor: colors.dangerSoft },
+  actionError: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radii.sm, backgroundColor: colors.dangerSoft, padding: 10 },
+  actionErrorText: { flex: 1 },
+  cancelButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radii.md },
 });
